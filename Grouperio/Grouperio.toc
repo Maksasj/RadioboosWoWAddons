@@ -1,0 +1,11 @@
+## Interface: 120005
+## Title: Grouperio
+## Notes: Colors Wardrobe transmog sets by expansion (filter coming soon)
+## Author: radioboos
+## Version: 0.4.0
+## SavedVariables: GROUPERIO_DB
+
+Data.lua
+Core.lua
+Filter.lua
+Integration.lua
