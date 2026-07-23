@@ -1,0 +1,11 @@
+## Interface: 120005
+## Title: Auctiozimba
+## Notes: Organize Auction House items into custom folders and filter browse results by folder.
+## Author: radioboos
+## Version: 0.1.2
+## SavedVariables: AUCTIOZIMBA_DB
+
+Core.lua
+Filter.lua
+UI.lua
+Integration.lua
