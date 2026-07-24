@@ -1,0 +1,32 @@
+name: Package & Release Addons
+
+on:
+  push:
+    tags:
+      - 'v*'      # Triggers on version tags (e.g., v1.0.0, v1.2.1)
+      - '*/*'     # Triggers on addon-specific tags (e.g., MyAddonOne/v1.0.0)
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        addon:
+          - name: 'Grouperio'
+            path: 'Grouperio'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for automatic changelog generation
+
+      - name: Run Packager for ${{ matrix.addon.name }}
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -t ${{ matrix.addon.path }}
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Creates a GitHub Release automatically
