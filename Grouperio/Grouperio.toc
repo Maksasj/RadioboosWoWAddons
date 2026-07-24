@@ -1,4 +1,4 @@
-## Interface: 120005
+## Interface: 1623378
 ## Title: Grouperio
 ## Notes: Colors Wardrobe transmog sets by expansion (filter coming soon)
 ## Author: radioboos
