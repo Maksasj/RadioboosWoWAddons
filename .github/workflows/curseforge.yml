@@ -25,8 +25,7 @@ jobs:
 
       - name: Run Packager for ${{ matrix.addon.name }}
         uses: BigWigsMods/packager@v2
-        with:
-          args: -t ${{ matrix.addon.path }} -m ${{ matrix.addon.path }}/.pkgmeta
+        # Do NOT put file paths like -p Grouperio/Grouperio.toc in args!
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
