@@ -15,7 +15,6 @@ jobs:
       matrix:
         addon:
           - name: 'Grouperio'
-            path: 'Grouperio'
 
     steps:
       - name: Checkout repository
@@ -25,8 +24,9 @@ jobs:
 
       - name: Run Packager for ${{ matrix.addon.name }}
         uses: BigWigsMods/packager@v2
-        with:
-          args: -m ${{ matrix.addon.path }}/${{ matrix.addon.name }}.toc
+        # Optional: add -p <CurseForge_Project_ID> here if it's not declared inside your .toc file
+        # with:
+        #   args: -p 123456
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
