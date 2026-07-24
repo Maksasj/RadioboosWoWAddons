@@ -26,7 +26,7 @@ jobs:
       - name: Run Packager for ${{ matrix.addon.name }}
         uses: BigWigsMods/packager@v2
         with:
-          args: -p ${{ matrix.addon.path }}/${{ matrix.addon.name }}.toc
+          args: -m ${{ matrix.addon.path }}/${{ matrix.addon.name }}.toc
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
