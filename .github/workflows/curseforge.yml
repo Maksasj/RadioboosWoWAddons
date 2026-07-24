@@ -26,7 +26,7 @@ jobs:
       - name: Run Packager for ${{ matrix.addon.name }}
         uses: BigWigsMods/packager@v2
         with:
-          args: -t ${{ matrix.addon.path }}
+          args: -d ${{ matrix.addon.path }}
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Creates a GitHub Release automatically
