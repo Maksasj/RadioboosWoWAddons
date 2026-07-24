@@ -3,8 +3,8 @@ name: Package & Release Addons
 on:
   push:
     tags:
-      - 'v*'      # Triggers on version tags (e.g., v1.0.0, v1.2.1)
-      - '*/*'     # Triggers on addon-specific tags (e.g., Grouperio/v1.0.0)
+      - 'v*'
+      - '*/*'
   workflow_dispatch:
 
 jobs:
@@ -25,7 +25,8 @@ jobs:
 
       - name: Run Packager for ${{ matrix.addon.name }}
         uses: BigWigsMods/packager@v2
-        working-directory: ${{ matrix.addon.path }}
+        with:
+          args: -p ${{ matrix.addon.path }}/${{ matrix.addon.name }}.toc
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
