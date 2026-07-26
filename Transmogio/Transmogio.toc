@@ -2,7 +2,7 @@
 ## Title: Transmogio
 ## Notes: Ultra-lightweight text overlay showing your unlocked transmog appearances vs total possible.
 ## Author: radioboos
-## Version: 0.3.0
+## Version: 0.7.2
 ## SavedVariables: TransmogioDB
 
 Transmogio.lua
