@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+- Collapsed the display down to a single line: gold and every pinned currency now sit side by side (e.g. `1,234|Tgold-icon|t 56|Tsilver-icon|t 78|Tcopper-icon|t   1,250/2,000`) instead of stacking one item per line.
+- Added real icons: gold/silver/copper now use Blizzard's own coin textures (`Interface\MoneyFrame\UI-*Icon`), and each currency shows its own `iconFileID` from `GetCurrencyListInfo`.
+- Currency amounts are now colored by rarity, reusing the same `ITEM_QUALITY_COLORS` table the default UI uses for item names, instead of one flat color for every currency.
+
 ## 0.1.0
 - Initial release.
 - Minimal text-only overlay (no background/border), outlined font for readability against any backdrop.

@@ -2,7 +2,7 @@
 ## Title: Pockezimba
 ## Notes: Ultra-lightweight text overlay showing gold and whichever currencies you've pinned to show on the backpack.
 ## Author: radioboos
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: PockezimbaDB
 
 Pockezimba.lua

@@ -32,11 +32,31 @@ local function FormatNumber(n)
     return sign .. formatted
 end
 
--- Formats copper as "1,234g 56s 78c". Silver/copper are always shown once
--- gold is present (so amounts stay easy to scan), but gold/silver are
--- dropped entirely when zero so a fresh character shows "3s 12c" instead of
--- a misleading "0g 3s 12c".
-local function FormatMoney(copperTotal)
+--------------------------------------------------------------------------------
+-- Rich-text helpers (inline icons/colors within a single FontString)
+--------------------------------------------------------------------------------
+
+local ICON_SIZE = 16
+
+-- These three coin texture paths have been stable Blizzard assets for the
+-- entire retail history of the game (used by every default-UI money
+-- display), so they're a safer bet than guessing at a money-formatting
+-- global whose exact name/signature can't be verified without a local
+-- client (see project memory: WoW addon dev pattern).
+local GOLD_ICON = "Interface\\MoneyFrame\\UI-GoldIcon"
+local SILVER_ICON = "Interface\\MoneyFrame\\UI-SilverIcon"
+local COPPER_ICON = "Interface\\MoneyFrame\\UI-CopperIcon"
+local MONEY_TEXT_COLOR = "ffffd200"
+
+local function IconMarkup(icon, size)
+    if not icon then return "" end
+    return string.format("|T%s:%d|t", icon, size)
+end
+
+-- Builds "1,234|Tgoldicon|t56|Tsilvericon|t78|Tcoppericon|t", dropping
+-- gold/silver when zero (a fresh character shows "3|Tsilvericon|t12|Tcoppericon|t"
+-- instead of misleading zeros) but always keeping copper.
+local function BuildMoneySegment(copperTotal)
     copperTotal = math.max(0, math.floor(copperTotal or 0))
     local gold = math.floor(copperTotal / 10000)
     local silver = math.floor((copperTotal % 10000) / 100)
@@ -44,21 +64,44 @@ local function FormatMoney(copperTotal)
 
     local parts = {}
     if gold > 0 then
-        parts[#parts + 1] = FormatNumber(gold) .. "g"
+        parts[#parts + 1] = string.format("|c%s%s|r%s", MONEY_TEXT_COLOR, FormatNumber(gold), IconMarkup(GOLD_ICON, ICON_SIZE))
     end
     if silver > 0 or gold > 0 then
-        parts[#parts + 1] = silver .. "s"
+        parts[#parts + 1] = string.format("|c%s%d|r%s", MONEY_TEXT_COLOR, silver, IconMarkup(SILVER_ICON, ICON_SIZE))
     end
-    parts[#parts + 1] = copper .. "c"
+    parts[#parts + 1] = string.format("|c%s%d|r%s", MONEY_TEXT_COLOR, copper, IconMarkup(COPPER_ICON, ICON_SIZE))
 
-    return table.concat(parts, " ")
+    return table.concat(parts, "")
+end
+
+-- ITEM_QUALITY_COLORS is the same global table the default UI uses to color
+-- item names by rarity (Poor/Common/Rare/Epic/etc.) -- each entry's `.hex`
+-- field is a ready-to-concatenate "|cffxxxxxx" prefix. Currencies expose the
+-- same quality tiers via GetCurrencyListInfo's `quality` field, so reusing
+-- it here gives currencies the same "proper" rarity coloring Blizzard's own
+-- Currency tab uses, instead of one flat color for everything.
+local function GetQualityColorPrefix(quality)
+    local colorInfo = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality or 1]
+    if colorInfo and colorInfo.hex then
+        return colorInfo.hex
+    end
+    return "|cffffffff"
+end
+
+local function BuildCurrencySegment(currencyData)
+    local amount = FormatNumber(currencyData.quantity)
+    if currencyData.maxQuantity and currencyData.maxQuantity > 0 then
+        amount = amount .. "/" .. FormatNumber(currencyData.maxQuantity)
+    end
+
+    return string.format("%s%s%s|r", IconMarkup(currencyData.icon, ICON_SIZE), GetQualityColorPrefix(currencyData.quality), amount)
 end
 
 --------------------------------------------------------------------------------
--- Frame & display (no background, outlined text only)
+-- Frame & display (no background, single outlined text line)
 --------------------------------------------------------------------------------
 
-local MAIN_COLOR = { 1.0, 0.82, 0.0 } -- gold
+local MAIN_COLOR = { 1.0, 0.82, 0.0 } -- gold, used as the fallback/base color
 
 local frame = CreateFrame("Frame", "PockezimbaFrame", UIParent)
 frame:SetSize(160, 20)
@@ -66,24 +109,13 @@ frame:SetClampedToScreen(true)
 frame:SetMovable(true)
 frame:RegisterForDrag("LeftButton")
 
-local goldText = frame:CreateFontString(nil, "OVERLAY")
-goldText:SetFont(STANDARD_TEXT_FONT, 13, "OUTLINE")
-goldText:SetTextColor(MAIN_COLOR[1], MAIN_COLOR[2], MAIN_COLOR[3])
-goldText:SetJustifyH("LEFT")
-goldText:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-goldText:SetText("Pockezimba: loading...")
-frame.goldText = goldText
-
--- Per-currency lines, created lazily, one per currency currently pinned to
--- show on the backpack (mirrors Blizzard's own BackpackTokenFrame list).
-local currencyLines = {}
-local LINE_GAP = -2
-
-local function HideCurrencyLinesFrom(fromIndex)
-    for i = fromIndex, #currencyLines do
-        currencyLines[i]:Hide()
-    end
-end
+local text = frame:CreateFontString(nil, "OVERLAY")
+text:SetFont(STANDARD_TEXT_FONT, 13, "OUTLINE")
+text:SetTextColor(MAIN_COLOR[1], MAIN_COLOR[2], MAIN_COLOR[3])
+text:SetJustifyH("LEFT")
+text:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+text:SetText("Pockezimba: loading...")
+frame.text = text
 
 local function SavePosition()
     local point, _, relativePoint, x, y = frame:GetPoint(1)
@@ -147,6 +179,8 @@ local function GetBackpackCurrencies()
                 name = info.name,
                 quantity = info.quantity or 0,
                 maxQuantity = info.maxQuantity or 0,
+                icon = info.iconFileID,
+                quality = info.quality,
             }
         end
     end
@@ -158,69 +192,30 @@ end
 -- Display
 --------------------------------------------------------------------------------
 
-local function RecalculateFrameSize()
-    local width = goldText:IsShown() and goldText:GetStringWidth() or 0
-    local height = goldText:IsShown() and (goldText:GetStringHeight() + 2) or 0
+local function BuildDisplayLine()
+    local db = Pockezimba.db
+    local segments = {}
 
-    for _, line in ipairs(currencyLines) do
-        if line:IsShown() then
-            width = math.max(width, line:GetStringWidth())
-            height = height + line:GetStringHeight() + 2
-        end
+    if db.showGold then
+        segments[#segments + 1] = BuildMoneySegment(GetMoney())
     end
 
-    frame:SetSize(math.max(width + 10, 40), math.max(height, 20))
+    for _, currencyData in ipairs(GetBackpackCurrencies()) do
+        segments[#segments + 1] = BuildCurrencySegment(currencyData)
+    end
+
+    if #segments == 0 then
+        return "Pockezimba: nothing pinned"
+    end
+
+    return table.concat(segments, " ")
 end
 
 local function RenderDisplay()
-    local db = Pockezimba.db
-    if not db then return end
+    if not Pockezimba.db then return end
 
-    local currencies = GetBackpackCurrencies()
-
-    if db.showGold then
-        goldText:SetText(FormatMoney(GetMoney()))
-        goldText:Show()
-    elseif #currencies == 0 then
-        -- Nothing to show at all -- surface a hint instead of an empty frame.
-        goldText:SetText("Pockezimba: nothing pinned")
-        goldText:Show()
-    else
-        goldText:Hide()
-    end
-
-    goldText:ClearAllPoints()
-    goldText:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-
-    local anchor = goldText:IsShown() and goldText or nil
-    for i, currencyData in ipairs(currencies) do
-        local line = currencyLines[i]
-        if not line then
-            line = frame:CreateFontString(nil, "OVERLAY")
-            line:SetFont(STANDARD_TEXT_FONT, 13, "OUTLINE")
-            line:SetTextColor(MAIN_COLOR[1], MAIN_COLOR[2], MAIN_COLOR[3])
-            line:SetJustifyH("LEFT")
-            currencyLines[i] = line
-        end
-
-        line:ClearAllPoints()
-        if anchor then
-            line:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, LINE_GAP)
-        else
-            line:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
-        end
-
-        if currencyData.maxQuantity and currencyData.maxQuantity > 0 then
-            line:SetText(string.format("%s: %s/%s", currencyData.name, FormatNumber(currencyData.quantity), FormatNumber(currencyData.maxQuantity)))
-        else
-            line:SetText(string.format("%s: %s", currencyData.name, FormatNumber(currencyData.quantity)))
-        end
-        line:Show()
-        anchor = line
-    end
-    HideCurrencyLinesFrom(#currencies + 1)
-
-    RecalculateFrameSize()
+    text:SetText(BuildDisplayLine())
+    frame:SetSize(math.max(text:GetStringWidth() + 10, 40), math.max(text:GetStringHeight(), 20))
 end
 Pockezimba.RenderDisplay = RenderDisplay
 
@@ -293,11 +288,11 @@ SlashCmdList["POCKEZIMBA"] = function(msg)
     elseif cmd == "gold" then
         if rest == "on" then
             Pockezimba.db.showGold = true
-            Print("Gold line shown.")
+            Print("Gold segment shown.")
             RenderDisplay()
         elseif rest == "off" then
             Pockezimba.db.showGold = false
-            Print("Gold line hidden.")
+            Print("Gold segment hidden.")
             RenderDisplay()
         else
             Print("Usage: /pkz gold on|off")
