@@ -473,51 +473,54 @@ local function ScanForNewAppearance()
     Transmogio.db.lastAppearanceTime = time()
 end
 
--- "Today" resets at local midnight and is tracked in TransmogioDB so it
--- persists across relogs/reloads within the same day (a plain in-memory
--- session counter would reset on every reload instead).
+-- "Today" resets at local midnight and is tracked per-character in
+-- TransmogioCharDB so it persists across relogs/reloads within the same day
+-- (a plain in-memory counter would reset on every reload instead) without
+-- bleeding into other characters' daily counts.
 local function GetTodayDateString()
     return date("%Y-%m-%d")
 end
 
 local function UpdateDailyBaseline(collected)
-    if not Transmogio.db then return end
+    if not Transmogio.charDB then return end
     local today = GetTodayDateString()
-    if Transmogio.db.dailyDate ~= today then
-        Transmogio.db.dailyDate = today
-        Transmogio.db.dailyBaselineCollected = collected
+    if Transmogio.charDB.dailyDate ~= today then
+        Transmogio.charDB.dailyDate = today
+        Transmogio.charDB.dailyBaselineCollected = collected
     end
 end
 
 local function GetTodayDelta(collected)
-    if not Transmogio.db or not Transmogio.db.dailyBaselineCollected then
+    if not Transmogio.charDB or not Transmogio.charDB.dailyBaselineCollected then
         return 0
     end
-    return collected - Transmogio.db.dailyBaselineCollected
+    return collected - Transmogio.charDB.dailyBaselineCollected
 end
 
 -- Manual session tracking, started/stopped via /tmo startsession /tmo
--- stopsession. Persisted in TransmogioDB so an active session survives a
--- /reload. sessionDeltaCache holds the delta as of the last recount so the
--- 1-second ticker can keep the elapsed time live without re-running one.
+-- stopsession. Persisted per-character in TransmogioCharDB (not the shared
+-- TransmogioDB) so an active session survives a /reload without being
+-- shared/clobbered across characters. sessionDeltaCache holds the delta as
+-- of the last recount so the 1-second ticker can keep the elapsed time live
+-- without re-running one.
 local sessionDeltaCache = 0
 
 local function IsSessionActive()
-    return Transmogio.db and Transmogio.db.sessionActive
+    return Transmogio.charDB and Transmogio.charDB.sessionActive
 end
 
 local function StartSession(collected)
-    if not Transmogio.db then return end
-    Transmogio.db.sessionActive = true
-    Transmogio.db.sessionBaselineCollected = collected
-    Transmogio.db.sessionStartTime = time()
+    if not Transmogio.charDB then return end
+    Transmogio.charDB.sessionActive = true
+    Transmogio.charDB.sessionBaselineCollected = collected
+    Transmogio.charDB.sessionStartTime = time()
     sessionDeltaCache = 0
 end
 Transmogio.StartSession = StartSession
 
 local function StopSession()
-    if not Transmogio.db then return end
-    Transmogio.db.sessionActive = false
+    if not Transmogio.charDB then return end
+    Transmogio.charDB.sessionActive = false
 end
 Transmogio.StopSession = StopSession
 
@@ -570,7 +573,7 @@ local function UpdateSessionLine()
         return
     end
 
-    local elapsed = time() - (Transmogio.db.sessionStartTime or time())
+    local elapsed = time() - (Transmogio.charDB.sessionStartTime or time())
     sessionText:SetText(string.format("Session: %s (%s, %s) - click to end", FormatSigned(sessionDeltaCache), FormatElapsed(elapsed), FormatRate(sessionDeltaCache, elapsed)))
     sessionText:Show()
     sessionButton:Show()
@@ -598,7 +601,7 @@ local function RenderDisplay(collected, possible, categories)
     text:SetText(string.format("Mog: %s/%s (%s%%) [%s today]", FormatNumber(collected), FormatNumber(possible), FormatPercent(collected, possible), FormatSigned(todayDelta)))
 
     if IsSessionActive() then
-        sessionDeltaCache = collected - (Transmogio.db.sessionBaselineCollected or collected)
+        sessionDeltaCache = collected - (Transmogio.charDB.sessionBaselineCollected or collected)
     end
     UpdateSessionLine()
     UpdateLastItemLine()
@@ -640,7 +643,7 @@ local function DoStopSession()
         return
     end
     local delta = sessionDeltaCache
-    local elapsed = time() - (Transmogio.db.sessionStartTime or time())
+    local elapsed = time() - (Transmogio.charDB.sessionStartTime or time())
     StopSession()
     UpdateSessionLine()
     AnchorStackedLines()
@@ -705,6 +708,20 @@ eventFrame:SetScript("OnEvent", function(self, event, name)
             end
         end
         Transmogio.db = TransmogioDB
+
+        -- Daily/session tracking used to live in the account-wide
+        -- TransmogioDB, which meant every character shared one daily
+        -- baseline and one session. Those stale fields are dropped here so
+        -- they don't linger unused; per-character state now lives in
+        -- TransmogioCharDB instead.
+        TransmogioDB.dailyDate = nil
+        TransmogioDB.dailyBaselineCollected = nil
+        TransmogioDB.sessionActive = nil
+        TransmogioDB.sessionBaselineCollected = nil
+        TransmogioDB.sessionStartTime = nil
+
+        TransmogioCharDB = TransmogioCharDB or {}
+        Transmogio.charDB = TransmogioCharDB
 
         RestorePosition()
         ApplyLockState()
@@ -779,8 +796,8 @@ SlashCmdList["TRANSMOGIO"] = function(msg)
             tostring(Transmogio.db.lastAppearanceID), tostring(Transmogio.db.lastAppearanceName), tostring(Transmogio.db.lastAppearanceTime)))
     elseif cmd == "resettoday" then
         RecountAppearancesAsync(function(collected, possible, categories)
-            Transmogio.db.dailyDate = GetTodayDateString()
-            Transmogio.db.dailyBaselineCollected = collected
+            Transmogio.charDB.dailyDate = GetTodayDateString()
+            Transmogio.charDB.dailyBaselineCollected = collected
             RenderDisplay(collected, possible, categories)
             Print("Today's counter reset to +0.")
         end)

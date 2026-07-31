@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.7.3
+- Daily counter and manual session tracking are now per-character instead of account-wide: added `TransmogioCharDB` (`SavedVariablesPerCharacter`) so each character gets its own daily baseline and its own session state. Previously all characters shared one `TransmogioDB` daily baseline/session, so switching characters mid-session (or on a different day) corrupted the delta shown.
+
 ## 0.7.2
 - Session line and the "Session ended" summary now include an items/hour rate, e.g. `Session: +5 (12m 34s, 23.7/hr) - click to end`.
 
